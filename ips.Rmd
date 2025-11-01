@@ -1,0 +1,405 @@
+---
+title: "ips"
+author: "Adelya Galimova"
+date: "2025-03-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+install.packages("DescTools")
+install.packages("EnvStats")
+install.packages("outliers")
+install.packages("readxl")
+install.packages("ggpubr")
+install.packages("Hmisc")
+install.packages("corrplot")
+install.packages("ppcor")
+install.packages("DiscriMiner")
+install.packages("rio")
+install.packages("robustHD")
+install.packages("ggplot2")
+install.packages("lmtest")
+install.packages("sjPlot")
+install.packages("normtest")
+install.packages("GGally")
+install.packages("leaps")
+install.packages("normtest")
+install.packages("installr")
+
+#updateR()
+library(installr)
+library(DescTools)
+library(EnvStats)
+library(outliers)
+library(readxl)
+library(ggpubr)
+library(Hmisc)
+library(corrplot)
+library(ppcor)
+#library(DiscriMiner)
+library(rio)
+library(robustHD)
+library(ggplot2)
+library(lmtest)
+library(sjPlot)
+#library(normtest)
+library(leaps)
+library(dplyr)
+library(GGally)
+```
+
+# Загрузка данных
+```{r}
+file_path <- "zp_koiki_doctor_2023_r.xlsx"
+df <- read_excel(file_path)
+```
+
+# Переименовываем столбцы для удобства
+```{r}
+colnames(df) <- c("Регион", "Зарплата", "Койко_места", "Врачи_на_10000")
+```
+
+
+# Проверяем структуру данных
+```{r}
+str(df)
+summary(df)
+```
+
+# Оценка неравенства: коэффициент Джини
+```{r}
+gini_coef <- function(x) {
+  x <- sort(x)
+  n <- length(x)
+  G <- 2 * sum((1:n) * x) / (n * sum(x)) - (n + 1) / n
+  return(G)
+}
+```
+
+# Рассчитываем коэффициенты Джини
+```{r}
+gini_koiki <- gini_coef(df$Койко_места)
+gini_vrachi <- gini_coef(df$Врачи_на_10000)
+gini_salary <- gini_coef(df$Зарплата)
+
+cat("Коэффициент Джини для койко-мест:", gini_koiki, "\n")
+cat("Коэффициент Джини для врачей на 10 000:", gini_vrachi, "\n")
+cat("Коэффициент Джини для зарплаты:", gini_salary, "\n")
+```
+
+# График распределения койко-мест и врачей по зарплате
+```{r}
+ggplot(df, aes(x = Зарплата)) +
+  geom_point(aes(y = Койко_места, color = "Койко-места")) +
+  geom_point(aes(y = Врачи_на_10000, color = "Врачи")) +
+  labs(title = "Распределение койко-мест и врачей в зависимости от зарплаты",
+       x = "Средняя зарплата",
+       y = "Количество") +
+  scale_color_manual(values = c("Койко-места" = "blue", "Врачи" = "red")) +
+  theme_minimal()
+```
+
+# Корреляционный анализ
+```{r}
+cor_matrix <- cor(df[, c("Зарплата", "Койко_места", "Врачи_на_10000")], use = "complete.obs")
+print(cor_matrix)
+```
+
+# Визуализация взаимосвязей
+```{r}
+ggpairs(df[, c("Зарплата", "Койко_места", "Врачи_на_10000")])
+```
+
+# Регрессионный анализ: как зарплата влияет на койко-места и врачей
+```{r}
+model_koiki <- lm(Койко_места ~ Зарплата, data = df)
+model_vrachi <- lm(Врачи_на_10000 ~ Зарплата, data = df)
+
+summary(model_koiki)
+summary(model_vrachi)
+```
+
+# Графики регрессионных зависимостей
+```{r}
+ggplot(df, aes(x = Зарплата, y = Койко_места)) +
+  geom_point() +
+  geom_smooth(method = "lm", col = "blue") +
+  labs(title = "Зависимость койко-мест от зарплаты", x = "Зарплата", y = "Койко-места") +
+  theme_minimal()
+
+ggplot(df, aes(x = Зарплата, y = Врачи_на_10000)) +
+  geom_point() +
+  geom_smooth(method = "lm", col = "red") +
+  labs(title = "Зависимость числа врачей от зарплаты", x = "Зарплата", y = "Врачи на 10 000") +
+  theme_minimal()
+```
+
+##############################################################################
+
+
+# 1. Проверка гипотезы: Зависимость количества коек от зарплаты
+```{r}
+df$Зарплата_кат <- cut(df$Зарплата, breaks = 4, labels = c("низкая", "средняя", "высокая", "очень высокая"))
+df$Койки_кат <- cut(df$Койко_места, breaks = 4, labels = c("мало", "средне", "много", "очень много"))
+```
+
+# Создаем таблицу сопряженности
+```{r}
+table_koiki_salary <- table(df$Койки_кат, df$Зарплата_кат)
+```
+
+# Хи-квадрат тест
+```{r,warning=FALSE}
+test_koiki <- chisq.test(table_koiki_salary)
+print(test_koiki)
+```
+
+# 2. Проверка гипотезы: Зависимость количества врачей на 10000 от зарплаты
+```{r}
+df$Врачи_кат <- cut(df$Врачи_на_10000, breaks = 4, labels = c("мало", "средне", "много", "очень много"))
+```
+
+# Таблица сопряженности
+```{r}
+table_vrachi_salary <- table(df$Врачи_кат, df$Зарплата_кат)
+table_vrachi_salary
+```
+
+# Хи-квадрат тест
+```{r,warning=FALSE}
+test_vrachi <- chisq.test(table_vrachi_salary)
+print(test_vrachi)
+```
+
+# 3. Проверка информационных критериев (AIC, BIC) через логистическую регрессию
+```{r}
+model_koiki <- glm(Койко_места ~ Зарплата, data = df, family = gaussian())
+model_vrachi <- glm(Врачи_на_10000 ~ Зарплата, data = df, family = gaussian())
+
+cat("AIC для коек:", AIC(model_koiki), "\n")
+cat("BIC для коек:", BIC(model_koiki), "\n")
+cat("AIC для врачей:", AIC(model_vrachi), "\n")
+cat("BIC для врачей:", BIC(model_vrachi), "\n")
+```
+
+# 4. Визуализация распределения
+```{r}
+ggplot(df, aes(x = Зарплата, y = Койко_места)) +
+  geom_point() +
+  geom_smooth(method = "lm", col = "blue") +
+  labs(title = "Зависимость коек от зарплаты", x = "Зарплата", y = "Койки") +
+  theme_minimal()
+
+ggplot(df, aes(x = Зарплата, y = Врачи_на_10000)) +
+  geom_point() +
+  geom_smooth(method = "lm", col = "red") +
+  labs(title = "Зависимость врачей от зарплаты", x = "Зарплата", y = "Врачи на 10 000") +
+  theme_minimal()
+```
+
+
+
+
+
+
+
+
+
+
+
+# Установка необходимых библиотек
+```{r}
+install.packages("dplyr")
+install.packages("ineq")
+
+library(dplyr)
+library(ineq)
+```
+
+# Пример данных
+```{r}
+data <- data.frame(
+  country = c("Country A", "Country B", "Country C", "Country D"),
+  life_expectancy = c(75, 80, 70, 85),  # Средняя ожидаемая продолжительность жизни
+  infant_mortality = c(5, 3, 7, 2),     # Младенческая смертность
+  morbidity_rate = c(10, 12, 8, 15)      # Уровень заболеваемости
+)
+```
+Шаг 2: Коэффициент вариации
+
+Коэффициент вариации (CV) вычисляется как отношение стандартного отклонения к среднему значению. Напишем функцию для вычисления CV и применим её к каждому из показателей:
+
+```{r}
+# Функция для расчета коэффициента вариации
+cv <- function(x) {
+  sd(x) / mean(x) * 100  # Умножаем на 100 для получения процента
+}
+
+# Применение функции ко всем показателям
+cv_results <- data %>%
+  summarise(
+    cv_life_expectancy = cv(life_expectancy),
+    cv_infant_mortality = cv(infant_mortality),
+    cv_morbidity_rate = cv(morbidity_rate)
+  )
+
+print(cv_results)
+
+```
+Шаг 3: Коэффициент Аткинсона
+
+Коэффициент Аткинсона измеряет неравенство в распределении доходов или благосостояния. В нашем случае мы можем использовать его для оценки неравенства в здоровье. Для этого нужно использовать пакет ineq.
+
+```{r}
+# Функция для расчета коэффициента Аткинсона
+atkinson_coefficient <- function(x, epsilon = 1) {
+  Atkinson(x, epsilon)
+}
+
+# Применение функции ко всем показателям
+atkinson_results <- data %>%
+  summarise(
+    atkinson_life_expectancy = atkinson_coefficient(life_expectancy),
+    atkinson_infant_mortality = atkinson_coefficient(infant_mortality),
+    atkinson_morbidity_rate = atkinson_coefficient(morbidity_rate)
+  )
+
+print(atkinson_results)
+```
+
+
+
+
+
+
+
+
+
+# Установка и загрузка необходимых пакетов
+```{r}
+install.packages("dplyr")
+install.packages("ineq")
+
+library(dplyr)
+library(ineq)
+```
+```{r message=FALSE, warning=FALSE}
+packages <- c("knitr", "kableExtra", "magrittr", "openxlsx", "pander", 
+              "corrplot", "caret", "FactoMineR", "factoextra", 
+              "devtools", "rio", "psych", "ggpubr", "REdaS")
+install.packages(packages)
+```
+
+
+```{r message=FALSE, warning=FALSE}
+library(knitr)
+library(kableExtra)
+library(magrittr)
+library(openxlsx)
+library(pander)
+library(corrplot)
+library(caret)
+library(FactoMineR)
+library(factoextra)
+library(devtools)
+library(rio)
+library(corrplot)
+library(psych)
+library(ggpubr)
+library(REdaS)
+```
+
+# Загрузка данных
+```{r}
+file_path <- "21.04.xlsx"
+df <- read.xlsx('21.04.xlsx', sheet = '1')
+#df <- read_excel(file_path)
+```
+
+# Переименовываем столбцы для удобства
+```{r}
+colnames(df) <- c("Область","Ср душевой доход","Средняя ожидаемая продолжительность жизни", "Младенческая смертность", "Уровень заболеваемости")
+```
+
+# Проверяем структуру данных
+```{r}
+str(df)
+summary(df)
+quartiles_salary <- quantile(df$salary, probs = seq(0, 1, by = 0.25), na.rm = TRUE)
+print(quartiles_salary)
+```
+# Создание таблицы из квартилей ср.душевого дохода по областям РФ
+```{r}
+quartiles_table <- data.frame(
+  Quartile = c("Q0", "Q1", "Q2", "Q3", "Q4"),
+  Value = quartiles_salary
+)
+
+# Печать таблицы
+print(quartiles_table)
+```
+
+# Шаг 2: Коэффициент вариации
+Коэффициент вариации (CV) вычисляется как отношение стандартного отклонения к среднему значению. Напишем функцию для вычисления CV и применим её к каждому из показателей:
+```{r}
+cv <- function(x) {
+  sd(x) / mean(x) * 100  # Умножаем на 100 для получения процента
+}
+```
+
+
+# Применение функции ко всем показателям
+```{r}
+cv_results <- data %>%
+  summarise(
+    cv_life_expectancy = cv(life_expectancy),
+    cv_infant_mortality = cv(infant_mortality),
+    cv_morbidity_rate = cv(morbidity_rate)
+  )
+
+print(cv_results)
+```
+
+
+
+# Шаг 3: Рассчет коэффициента Аткинсона для каждого показателя
+
+Коэффициент Аткинсона измеряет неравенство в распределении доходов или благосостояния. В нашем случае мы можем использовать его для оценки неравенства в здоровье. Для этого нужно использовать пакет ineq.
+```{r}
+# Функция для расчета коэффициента Аткинсона
+atkinson_coefficient <- function(x, epsilon = 1) {
+  Atkinson(x, epsilon)
+}
+
+# Применение функции ко всем показателям
+atkinson_results <- data %>%
+  summarise(
+    atkinson_life_expectancy = atkinson_coefficient(life_expectancy),
+    atkinson_infant_mortality = atkinson_coefficient(infant_mortality),
+    atkinson_morbidity_rate = atkinson_coefficient(morbidity_rate)
+  )
+
+print(atkinson_results)
+```
+
+```{r}
+
+```
+
+
+```{r}
+```
+
+
+
+```{r}
+```
+
+
+
+```{r}
+```

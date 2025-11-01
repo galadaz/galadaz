@@ -1,0 +1,390 @@
+---
+title: "САНИ_N4_В3_4_ГалимоваАделя"
+author: "Adelya Galimova"
+date: "2025-03-14"
+output:
+  pdf_document: default
+  html_document: default
+---
+---
+# Домашняя работа №4
+## Галимова Аделя
+## Группа 4
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+install.packages("xfun")
+
+```
+
+### Для начала подготовим и загрузим нужные библиотеки.
+```{r,warning=FALSE,message=FALSE}
+library(knitr)
+library(kableExtra)
+library(magrittr)
+library(openxlsx)
+library(DescTools)
+library(EnvStats)
+library(outliers)
+library(psych)
+library(ggplot2)
+library(pander)
+library(MASS)
+library(xfun)
+```
+
+## Теперь создадим таблицу сопряженности для признаков X - возраст (Младше 40 лет или Старше 40 лет), Y - имеют высшее образование (Нет или Да) и Z - Читательские предпочтения (Исторические романы или Детективы).
+
+```{r}
+mydata1 <- array(c(86, 93, 54, 55, 389, 413, 103, 17), dim=c(2,2,2), dimnames = list ('age' = c("<40", ">40"),  'high_education' = c("No", "Yes"), 'literature' = c("History novel", "Detective")))
+mydata1
+```
+
+## Построим плоскую таблицу сопряженности:
+```{r}
+mydata2 <- ftable(mydata1) 
+mydata2
+```
+
+## Построим плоскую таблицу частот:
+```{r}
+fmydata2 <- as.data.frame(mydata2) 
+fmydata2
+```
+
+## Создадим матрицу 20x6, куда будем записывать информацию по каждой модели: 
+```{r}
+answer <- matrix(data = 0, nrow = 19, ncol = 5) 
+colnames(answer) <- c('Likelihood Ratio', 'df', 'p-value', 'n*221', 'u2z' ) 
+rownames(answer) <- c('XYZ', 'XY/YZ/XZ', 'XY/XZ', 'XY/YZ', 'XZ/YZ', 'XY/Z', 'XZ/Y', 'YZ/X', 'X/Y/Z', 'XY', 'XZ', 'YZ', 'X/Y', 'X/Z', 'Y/Z', 'Y', 'Z', 'X', 'Равновероятная')
+```
+
+# Расссматриваем насыщенную модель:
+```{r}
+lm_XYZ <- loglm(formula = Freq ~ age*high_education*literature, data = fmydata2)
+lm_XYZ
+```
+Теперь найдем теоретическую частоту в ячейке (2,2,1)
+```{r}
+fitted(lm_XYZ)[2, 2, 1] 
+```
+Поиск значения главного эффекта второй категории признака Z:
+```{r}
+coef(lm_XYZ)['literature'] 
+```
+
+```{r}
+answer[1,1] <- 0 
+answer[1,2] <- 0 
+answer[1,3] <- 1 
+answer[1,4] <- 55   
+answer[1,5] <- -0.3089632
+```
+
+# То же самое с моделью XY/YZ/XZ: 
+```{r}
+lm_XY.XZ.YZ <- loglm(formula = Freq ~ (age*high_education) + (age*literature) + (high_education*literature), 
+                 data = fmydata2)
+lm_XY.XZ.YZ
+fitted(lm_XY.XZ.YZ)[2,2,1]
+coef(lm_XY.XZ.YZ)['literature']
+```
+```{r}
+answer[2,1] <- 26.71795 
+answer[2,2] <- 1 
+answer[2,3] <- 2.354239e-07 
+answer[2,4] <- 39.71426
+answer[2,5] <- -0.3841738
+```
+
+# Модель XY/XZ:
+```{r}
+lm_XY.XZ <- loglm(formula = Freq ~ (high_education+literature)*age, 
+                 data = fmydata2)
+lm_XY.XZ
+fitted(lm_XY.XZ)[2,2,1]
+coef(lm_XY.XZ)['literature']
+```
+```{r}
+answer[3,1] <- 113.1093 
+answer[3,2] <- 2 
+answer[3,3] <- 0 
+answer[3,4] <- 122.2215 
+answer[3,5] <- -0.5808523 
+```
+
+# Модель XY/YZ:
+```{r}
+lm_XY.YZ <- loglm(formula = Freq ~ (age+literature)*high_education, 
+                 data = fmydata2)
+lm_XY.YZ
+fitted(lm_XY.YZ)[2,2,1]
+coef(lm_XY.YZ)['literature']
+```
+```{r}
+answer[4,1] <- 36.14442 
+answer[4,2] <- 2 
+answer[4,3] <- 1.416900e-08
+answer[4,4] <- 413.6718
+answer[4,5] <- -0.3989667
+```
+
+# Модель XZ/YZ:
+```{r}
+lm_XZ.YZ <- loglm(formula = Freq ~ (age+high_education)*literature, 
+                 data = fmydata2)
+lm_XZ.YZ
+fitted(lm_XZ.YZ)[2,2,1]
+coef(lm_XZ.YZ)['literature']
+```
+```{r}
+answer[5,1] <- 65.04743
+answer[5,2] <- 2 
+answer[5,3] <- 7.549517e-15
+answer[5,4] <- 56.01389
+answer[5,5] <- -0.3980266
+```
+
+# Модель XY/Z:
+```{r}
+lm_XY.Z <- loglm(formula = Freq ~ age*high_education + literature, 
+                 data = fmydata2)
+lm_XY.Z 
+fitted(lm_XY.Z)[2,2,1]
+coef(lm_XY.Z)['literature']
+```
+
+```{r}
+answer[6,1] <- 115.0932 
+answer[6,2] <- 3 
+answer[6,3] <- 0
+answer[6,4] <- 17.13719
+answer[6,5] <- -0.5817924
+```
+
+# Модель XZ/Y
+```{r}
+lm_XZ.Y <- loglm(formula = Freq ~ age*literature + high_education, 
+                 data = fmydata2)
+lm_XZ.Y 
+fitted(lm_XZ.Y)[2,2,1]
+coef(lm_XZ.Y)['literature']
+```
+
+```{r}
+answer[7,1] <- 143.9962
+answer[7,2] <- 3 
+answer[7,3] <- 0 
+answer[7,4] <- 348.6198 
+answer[7,5] <- -0.5808523 
+```
+
+# Модель YZ/X:
+```{r}
+lm_YZ.X <- loglm(formula = Freq ~ high_education*literature + age, 
+                 data = fmydata2)
+lm_YZ.X 
+fitted(lm_YZ.X )[2,2,1]
+coef(lm_YZ.X )['literature']
+```
+```{r}
+answer[8,1] <- 67.03131
+answer[8,2] <- 3 
+answer[8,3] <- 1.842970e-14
+answer[8,4] <- 62.67769 
+answer[8,5] <- -0.3989667
+```
+
+# Модель X/Y/Z:
+```{r}
+lm_X.Y.Z <- loglm(formula = Freq ~ age + high_education + literature, 
+                 data = fmydata2)
+lm_X.Y.Z 
+fitted(lm_X.Y.Z)[2,2,1]
+coef(lm_X.Y.Z)['literature']
+```
+
+```{r}
+answer[9,1] <- 145.9801
+answer[9,2] <- 4 
+answer[9,3] <- 0
+answer[9,4] <- 26.03665
+answer[9,5] <- -0.5817924 
+```
+
+# Модель XY:
+```{r}
+lm_XY <- loglm(formula = Freq ~ age * high_education, 
+                 data = fmydata2)
+lm_XY
+fitted(lm_XY)[2,2,1]
+coef(lm_XY)['literature']
+```
+
+```{r}
+answer[10,1] <- 464.4549
+answer[10,2] <- 4 
+answer[10,3] <- 0
+answer[10,4] <- 36
+answer[10,5] <- 0
+```
+
+# Модель XZ:
+```{r}
+lm_XZ <- loglm(formula = Freq ~ age * literature, 
+                 data = fmydata2)
+lm_XZ 
+fitted(lm_XZ)[2,2,1]
+coef(lm_XZ)['literature']
+```
+
+```{r}
+answer[11,1] <- 647.3672
+answer[11,2] <- 4 
+answer[11,3] <- 0
+answer[11,4] <- 215
+answer[11,5] <- -0.5808523 
+```
+
+# Модель YZ:
+```{r}
+lm_YZ <- loglm(formula = Freq ~ high_education * literature, 
+                 data = fmydata2)
+lm_YZ 
+fitted(lm_YZ)[2,2,1]
+coef(lm_YZ)['literature']
+```
+
+```{r}
+answer[12,1] <- 69.44203 
+answer[12,2] <- 4 
+answer[12,3] <- 2.975398e-14
+answer[12,4] <- 60
+answer[12,5] <- -0.3989667
+```
+
+
+# Модель X/Y:
+```{r}
+lm_X.Y <- loglm(formula = Freq ~ age + high_education, 
+                 data = fmydata2)
+lm_X.Y 
+fitted(lm_X.Y)[2,2,1]
+coef(lm_X.Y)['literature']
+```
+
+```{r}
+answer[13,1] <- 495.3418 
+answer[13,2] <- 5 
+answer[13,3] <- 0
+answer[13,4] <- 54.69504 
+answer[13,5] <- 0 
+```
+
+# Модель X/Z:
+```{r}
+lm_X.Z <- loglm(formula = Freq ~ age + literature, 
+                 data = fmydata2)
+lm_X.Z 
+fitted(lm_X.Z)[2,2,1]
+coef(lm_X.Z)['literature']
+```
+
+```{r}
+answer[14,1] <- 649.3510 
+answer[14,2] <- 5 
+answer[14,3] <- 0
+answer[14,4] <- 220.2132
+answer[14,5] <- -0.5817924
+```
+
+# Модель Y/Z:
+```{r}
+lm_Y.Z <- loglm(formula = Freq ~ high_education + literature, 
+                 data = fmydata2)
+lm_Y.Z 
+fitted(lm_Y.Z)[2,2,1]
+coef(lm_Y.Z)['literature']
+```
+
+```{r}
+answer[15,1] <- 148.3908 
+answer[15,2] <- 5 
+answer[15,3] <- 0
+answer[15,4] <- 87.24711
+answer[15,5] <- -0.5817924
+```
+
+# Модель Y:
+```{r}
+lm_Y <- loglm(formula = Freq ~ age + high_education - age, 
+                 data = fmydata2)
+lm_Y
+fitted(lm_Y)[2,2,1]
+coef(lm_Y)['literature']
+```
+
+```{r}
+answer[16,1] <- 497.7525
+answer[16,2] <- 6 
+answer[16,3] <- 0
+answer[16,4] <- 57.25
+answer[16,5] <- 0 
+```
+
+# Модель Z:
+```{r}
+lm_Z <- loglm(formula = Freq ~ age + literature - age, 
+                 data = fmydata2)
+lm_Z
+fitted(lm_Z)[2,2,1]
+coef(lm_Z)['literature']
+```
+
+```{r}
+answer[17,1] <- 651.7618 
+answer[17,2] <- 6 
+answer[17,3] <- 0
+answer[17,4] <- 230.5
+answer[17,5] <- -0.5817924
+```
+
+
+# Модель X:
+```{r}
+lm_X <- loglm(formula = Freq ~ age + literature - literature,
+                 data = fmydata2)
+lm_X
+fitted(lm_X)[2,2,1]
+coef(lm_X)['literature']
+```
+
+```{r}
+answer[18,1] <- 998.7128
+answer[18,2] <- 6 
+answer[18,3] <- 0
+answer[18,4] <- 144.5
+answer[18,5] <- 0 
+```
+
+# Равновероятная модель: 
+```{r}
+lm_equal <- glm(formula = Freq ~ 1, 
+                 data = fmydata2,
+                 family = poisson)
+lm_equal
+fitted.values(lm_equal)
+coefficients(lm_equal)['literature']
+```
+
+```{r}
+answer[19,1] <- 1001
+answer[19,2] <- 7 
+answer[19,3] <- 0
+answer[19,4] <- 151.25
+answer[19,5] <- 0 
+```
+
+# Получили матрицу с информацией по каждой модели (ячейка (2,2,1)):
+```{r}
+answer
+```

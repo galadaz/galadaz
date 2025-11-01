@@ -1,0 +1,129 @@
+---
+title: "Домашнее задание №7"
+author: "Adelya Galimova"
+date: "2025-06-05"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+install.packages("rpart.plot")
+install.packages("tree")
+install.packages("MLmetrics")
+install.packages("randomForest")
+install.packages("gbm")
+library(knitr)
+library(kableExtra)
+library(magrittr)
+library(openxlsx)
+library(pander)
+library(rio)
+library(rpart) 
+library(rpart.plot)
+library(tree)
+library(MLmetrics)
+library(randomForest)
+library(gbm)
+```
+
+```{r}
+desc <- read.xlsx('russian_regions.xlsx', sheet = 'Data')
+```
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+desc <- read.xlsx('russian_regions.xlsx', sheet = 'Description of data')
+kbl(desc, caption = "Таблица 1. Описание данных", booktabs = T, 
+    col.names = c("Переменная", "Описание переменной")) %>% 
+  kable_classic_2(html_font = "Cambria", font_size = 10, full_width = F) %>%
+  pack_rows("Зависимая переменная", 1, 1) %>%
+  pack_rows("Уровень жизни", 2, 3) %>%
+  pack_rows("Медицина", 4, 6) %>%
+  pack_rows("Экология", 7, 8) %>%
+  pack_rows("Рынок труда", 9, 17) %>%
+  pack_rows("Прочее", 18, 18)
+
+
+desc <- read.xlsx("russian_regions.xlsx", sheet = "Data")
+desc <- desc[ , !(names(desc) %in% c("REGION", "FEDERAL_OKRUG"))]
+desc <- na.omit(desc)
+
+set.seed(123)
+sample <- sample(nrow(desc), nrow(desc)/2)
+train <- desc[sample, ]
+test <- desc[-sample, ]
+
+```
+
+>1. На основе данных `russian_regions.xlsx` построить регрессионное дерево методами bagging и boosting, сравнить качество полученных моделей с помощью расчета MSE и RMSE.
+
+#BAGGING
+```{r, warning = FALSE, message = FALSE}
+set.seed(123)
+bag_model <- randomForest(Q_OF_LIFE_INDEX ~ ., data = train, mtry = ncol(train)-1)
+bag_pred <- predict(bag_model, newdata = test)
+
+mse_bag <- mean((test$Q_OF_LIFE_INDEX - bag_pred)^2)
+rmse_bag <- RMSE(bag_pred, test$Q_OF_LIFE_INDEX)
+
+cat("Bagging MSE:", round(mse_bag, 4), "\n")
+cat("Bagging RMSE:", round(rmse_bag, 4), "\n")
+```
+MSE: низкий уровень ошибки, а значит, хорошая обобщающая способность модели.
+
+RMSE: подтверждение стабильности прогноза и невысокое расхождение между предсказанными и фактическими значениями.
+
+Вывод: BAGGING хорошо справляется с задачей, уменьшая дисперсию модели и повышая устойчивость за счёт усреднения большого количества деревьев.
+
+#BOOSTING
+```{r, warning = FALSE, message = FALSE, include=False}
+set.seed(123)
+boost_model <- gbm(Q_OF_LIFE_INDEX ~ ., data = train,
+                   distribution = "gaussian",
+                   n.trees = 5000,
+                   interaction.depth = 3,
+                   shrinkage = 0.01,
+                   n.minobsinnode = 5,
+                   bag.fraction = 0.4,
+                   verbose = FALSE)
+
+boost_pred <- predict(boost_model, newdata = test, n.trees = 5000)
+
+mse_boost <- mean((test$Q_OF_LIFE_INDEX - boost_pred)^2)
+rmse_boost <- RMSE(boost_pred, test$Q_OF_LIFE_INDEX)
+
+cat("Boosting MSE:", round(mse_boost, 4), "\n")
+cat("Boosting RMSE:", round(rmse_boost, 4), "\n")
+```
+
+Boosting показал значения, которые меньше MSE и RMSE по сравнению с Bagging, а значит, более точное моделирование зависимости.
+
+Вывод: Boosting дал более точный прогноз.
+
+>2. Построить лучшую модель случайного леса, меняя параметр, отвечающий за количество переменный, используемых для разделения узла. Проверить качество и сравнить с результатами из предыдущего пункта.
+
+```{r, warning = FALSE, message = FALSE}
+results <- data.frame(mtry = integer(), MSE = double(), RMSE = double())
+
+for (m in 2:(ncol(train)-1)) {
+  set.seed(123)
+  rf_model <- randomForest(Q_OF_LIFE_INDEX ~ ., data = train, mtry = m)
+  rf_pred <- predict(rf_model, newdata = test)
+  mse <- mean((test$Q_OF_LIFE_INDEX - rf_pred)^2)
+  rmse <- RMSE(rf_pred, test$Q_OF_LIFE_INDEX)
+  results <- rbind(results, data.frame(mtry = m, MSE = mse, RMSE = rmse))
+}
+
+best_model <- results[which.min(results$MSE), ]
+print(results)
+cat("\nЛучшая модель случайного леса при mtry =", best_model$mtry, "\n")
+cat("MSE =", round(best_model$MSE, 4), "\n")
+cat("RMSE =", round(best_model$RMSE, 4), "\n")
+```
+Модель случайного леса с оптимальным mtry превзошла bagging и оказалась сопоставима по качеству с boosting, но при этом не потребовала сложной настройки.
+
+Вывод: случайный лес стал самым сбалансированным решением — он обеспечивает высокую точность, устойчив к переобучению и требует меньше ручной настройки по сравнению с boosting.

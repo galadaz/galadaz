@@ -1,0 +1,194 @@
+---
+title: "ДЗ1_Галимова_1"
+author: "Галимова Аделя"
+date: "2025-02-05"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+library(knitr)
+library(kableExtra)
+library(magrittr)
+library(openxlsx)
+library(DescTools)
+library(pander)
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+df <- read.xlsx('russian_regions.xlsx', sheet = 'Data')
+df$FEDERAL_OKRUG <- as.factor(df$FEDERAL_OKRUG)
+```
+
+```{r, echo = FALSE}
+desc <- read.xlsx('russian_regions.xlsx', sheet = 'Description of data')
+kbl(desc, caption = "Таблица 1. Описание данных", booktabs = T, 
+    col.names = c("Переменная", "Описание переменной")) %>% 
+  kable_classic_2(html_font = "Cambria", font_size = 10, full_width = F) %>%
+  pack_rows("Зависимая переменная", 1, 1) %>%
+  pack_rows("Уровень жизни", 2, 3) %>%
+  pack_rows("Медицина", 4, 6) %>%
+  pack_rows("Экология", 7, 8) %>%
+  pack_rows("Рынок труда", 9, 17) %>%
+  pack_rows("Прочее", 18, 18)
+```
+
+### 1. Вычислить значения характеристик положения, разброса, квартилей для переменной `Q_OF_LIFE_INDEX`, дать интерпретацию, выдвинуть предположения о распределении.
+
+#### 1.1 Характеристики положения 
+
+
+```{r, echo = FALSE}
+paste('Среднее: ', round(mean(df$Q_OF_LIFE_INDEX), 3))
+paste('Медиана: Me = ', median(df$Q_OF_LIFE_INDEX))
+paste('Мода: Mo = ', Mode(df$Q_OF_LIFE_INDEX))
+```
+
+Заметим, что среднее и медиана находятся довольно близко друг к другу, что может указывать на предположение о возможном нормальном распределении исследуемой переменной. Кроме того, самым распространенным значением в выборке является $48.591$, то есть в большинстве регионов рейтинг качества жизни составляет: $48.591$.
+
+#### 1.2 Характеристики разброса
+
+```{r, echo = FALSE}
+paste('min =', range(df$Q_OF_LIFE_INDEX)[1])
+paste('max =', range(df$Q_OF_LIFE_INDEX)[2])
+paste('Размах: R = max - min =', round(range(df$Q_OF_LIFE_INDEX)[2] - range(df$Q_OF_LIFE_INDEX)[1], 3))
+paste('Дисперсия: Var(Q_OF_LIFE_INDEX) =', round(var(df$Q_OF_LIFE_INDEX), 3))
+paste('Стандартное отклонение: sd(Q_OF_LIFE_INDEX) =', round(sd(df$Q_OF_LIFE_INDEX), 3))
+paste('Интерквартильный размах: IQR = Q3 - Q1 =', IQR(df$Q_OF_LIFE_INDEX))
+paste('Коэффициент вариации: CV =', round(CoefVar(df$Q_OF_LIFE_INDEX)*100, 3), '%')
+```
+Коэффициент вариации равен $23.794$ %, а это меньше $33$ %, следовательно, *выборка - однородная*.
+
+#### 1.3 Характеристики квартилей
+
+```{r, echo = FALSE}
+pander(quantile(df$Q_OF_LIFE_INDEX))
+```
+
+Согласно этим показателям, можем увидеть, что данные равномерно распределены по всему диапазону. 
+Распределение достаточно похоже на нормальное, но пока нельзя делать окончательные выводы.
+
+### 2. Имеются ли основания по имеющейся выборке считать, что распределение переменной `Q_OF_LIFE_INDEX` подчиняется логнормальному закону?
+
+#### 2.1 Построить гистограмму распределения с наложением плотности нормального распределения, квантильный график
+
+```{r, echo = FALSE}
+mydata <- log(df$Q_OF_LIFE_INDEX)
+```
+
+```{r, warning = FALSE, message = FALSE}
+ggplot(df, aes(x = mydata)) + 
+  geom_histogram(aes(y=..density..), color = "black", fill = "chartreuse1") + 
+  geom_line(aes(x = mydata, y = dnorm(mydata, mean = mean(mydata), sd = sd(mydata))), lwd = 1, col = 'firebrick3') +
+  ylab("Относительная частота") +
+  xlab("Рейтинг качества жизни в регионах")
+```
+
+По гистограмме видно, что график прологарифмированных значений практически соответствует нормальному распределению, но также имеются критические значения и выбросы, из-за чего нельзя сделать окончательный вывод. 
+
+Теперь построим квантильный график для переменной `mydata`, используя нормальное распределение в качестве теоретического.
+
+```{r}
+qqnorm(scale(mydata), main = 'Нормальный график Q-Q',
+       xlab = 'Теоретические квантили', ylab = 'Выборочные квантили')
+lines(scale(log(mydata)), scale(log(mydata)), type = 'l')
+```
+
+По квантильному графику можно заметить, что распределение данных близко к нормальному, но наличие выбросов вызывает сомнения относительно его соответствия нормальному закону. 
+
+#### 2.2 Проверить гипотезу о нормальном распределении логарифма тестом Шапиро-Уилка
+
+```{r}
+pander(shapiro.test(mydata))
+```
+
+P-value = $0.03686$.
+
+Значение меньше стандартного уровня значимости $0.05$, что приводит к отвержению нулевой гипотезы о нормальности распределения. Этот тест является наиболее мощным среди критериев нормальности, и на уровне значимости $5$ % гипотеза отвергается.
+
+Значения переменной Q_OF_LIFE_INDEX не подчиняются логнормальному закону распределения.
+
+### 3. Изобразить ящичковую диаграмму переменной `Q_OF_LIFE_INDEX`. Сделать выводы. Провести диагностику выбросов с помощью правила 1.5IQR.
+
+#### 3.1 Ящичковая диаграмма
+```{r}
+ggplot(df, aes(x = "", y = Q_OF_LIFE_INDEX)) +
+  geom_boxplot(fill = "darkslategray1", color = "firebrick3") +
+  labs(title = "", x = "Ящичковая диаграмма переменной Q_OF_LIFE_INDEX", y = "Q_OF_LIFE_INDEX") +
+  theme_minimal()
+```
+
+Выбросы присутствуют как среди минимальных, так и среди максимальных значений, что также свидетельствует о наличии экстремальных значениях. 
+
+#### 3.2 Применим правило **1.5 IQR**
+
+```{r}
+Q_OF_LIFE_INDEX_sorted <- sort(df$Q_OF_LIFE_INDEX)
+out_of_1.5IQR <- boxplot.stats(df$Q_OF_LIFE_INDEX)$out
+paste(out_of_1.5IQR)
+```
+
+Теперь надо определить номера выбросов (наблюдений):
+```{r}
+out_of_1.5IQR_ind <- which(Q_OF_LIFE_INDEX_sorted %in% out_of_1.5IQR)
+out_of_1.5IQR_ind
+```  
+Значит, что выбросами считаются значения $19.10$5 и те, что привышают $75.858$. Тем не менее, их немного, что указывает на близость распределения к нормальному.
+
+### 4. Повторить п. 2, удалив из выборки резко выделяющиеся наблюдения из п. 3
+
+```{r}
+Q1 <- quantile(df$Q_OF_LIFE_INDEX, 0.25) 
+Q3 <- quantile(df$Q_OF_LIFE_INDEX, 0.75) 
+IQR <- Q3 - Q1 
+lower_ <- Q1 - 1.5 * IQR 
+upper_ <- Q3 + 1.5 * IQR
+df_clean <- df %>% filter(df$Q_OF_LIFE_INDEX >= lower_ & df$Q_OF_LIFE_INDEX <= upper_)
+```
+
+```{r, echo = FALSE}
+mydata2 <- log(df_clean$Q_OF_LIFE_INDEX)
+```
+
+```{r, warning = FALSE, message = FALSE}
+ggplot(df_clean, aes(x = mydata2)) + 
+  geom_histogram(aes(y=..density..), color = "black", fill = "chartreuse1") + 
+  geom_line(aes(x = mydata2, y = dnorm(mydata2, mean = mean(mydata2), sd = sd(mydata2))), lwd = 1, col = 'firebrick3') +
+  ylab("Относительная частота") +
+  xlab("Рейтинг качества жизни в регионах")
+```
+
+Построим квантильный график для переменной `mydata2`, выбрав в качестве теоретического распределения *нормальное*.
+```{r}
+qqnorm(scale(mydata2), main = 'Нормальный график Q-Q',
+       xlab = 'Теоретические квантили', ylab = 'Выборочные квантили')
+lines(scale(log(mydata2)), scale(log(mydata2)), type = 'l')
+```
+
+#### 2.2 Проверить гипотезу о нормальном распределении логарифма тестом Шапиро-Уилка
+
+```{r}
+pander(shapiro.test(mydata2))
+```
+
+P-value = $0.05659$. Значение превышает стандартный пороговый уровень значимости $0.05$, поэтому нулевая гипотеза о нормальности распределения не отвергается. Данный тест наиболее мощный среди критериев нормальности, поэтому на уровне значимости $5$ % можно утверждать, что прологарифмированные значения переменной Q_OF_LIFE_INDEX без выбросов и экстремальных значений подчиняются нормальному распределения. Это, в свою очередь, означает, что значения переменной Q_OF_LIFE_INDEX подчиняются логнормальному закону распределения.
+
+### 5. Изобразить скрипичный график для логарифма `Q_OF_LIFE_INDEX` и для каждого уровня фактора `FEDERAL_OKRUG`. Какой вывод можно сделать? Проверить гипотезу о равенстве средних в группах. Какие ограничения необходимо учесть при проверке гипотезы? 
+
+#### Скрипичный график без выбросов:
+
+```{r}
+ggplot(data = df_clean, aes(x = FEDERAL_OKRUG, y = mydata2, fill = FEDERAL_OKRUG)) +
+  geom_violin(trim = FALSE) +
+  geom_boxplot(width = 0.1, fill = "darkslategray1", outlier.shape = NA) +
+  labs(title = "Скрипичный график логарифма рейтинга качества жизни",
+       y = "Логарифм рейтинга качества жизни",
+       x = "Федеральный округ") +
+  theme_minimal() + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), legend.position = "none")
+```
+
+Какой вывод можем сделать: рейтинг качества жизни варьируется в разных регионах, однако в целом некоторые значения находятся близко друг от друга.

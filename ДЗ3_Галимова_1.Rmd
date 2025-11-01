@@ -1,0 +1,135 @@
+---
+title: "Домашнее задание №3"
+author: "Adelya Galimova"
+date: "2025-03-13"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Для начала загрузим библиотеки. 
+```{r message=FALSE, warning=FALSE}
+library(knitr)
+library(kableExtra)
+library(magrittr)
+library(openxlsx)
+library(DescTools)
+library(rio)
+library(robustHD)
+library(ggpubr)
+library(ggplot2)
+library(lmtest)
+library(sjPlot)
+library(tseries)
+library(GGally)
+library(leaps)
+library(questionr)
+library(pander)
+```
+
+
+Загрузим данные: 
+```{r}
+df <- read.xlsx('russian_regions.xlsx', sheet = 'Data')
+```
+
+#1 Построим модель зависимости индекса качества жизни от среднедушевых денежных доходов и ВРП на душу населения. 
+Но сначала выведем описание данных:
+```{r, echo = FALSE}
+desc <- read.xlsx('russian_regions.xlsx', sheet = 'Description of data')
+kbl(desc, caption = "Таблица 1. Описание данных", booktabs = T, 
+    col.names = c("Переменная", "Описание переменной")) %>% 
+  kable_classic_2(html_font = "Cambria", font_size = 10, full_width = F) %>%
+  pack_rows("Зависимая переменная", 1, 1) %>%
+  pack_rows("Уровень жизни", 2, 3) %>%
+  pack_rows("Медицина", 4, 6) %>%
+  pack_rows("Экология", 7, 8) %>%
+  pack_rows("Рынок труда", 9, 17) %>%
+  pack_rows("Прочее", 18, 18)
+```
+
+```{r}
+mydata3 <- lm(Q_OF_LIFE_INDEX ~ AVERAGE_INCOME + GRP, data = df)
+summary(mydata3)
+```
+## Теперь проинтерпретируем результаты:
+Среднедушевые доходы значимо влияют на индекс качества жизни. Рост доходов связан с увеличением индекса. 
+
+# 2) Построим отдельно две модели с такими же объясняющими переменными, как в первом пункте отдельно для Центрального ФО (mydata22), и для остальных(mydata33).
+
+## Разделение данных на Центральный ФО и остальные
+```{r}
+df_central <- df[df$FEDERAL_OKRUG == "Центральный ФО", ]
+df_other <- df[df$FEDERAL_OKRUG != "Центральный ФО", ]
+```
+
+## Модели для Центрального ФО и остальных
+```{r}
+mydata22 <- lm(Q_OF_LIFE_INDEX ~ AVERAGE_INCOME + GRP, data = df_central)
+mydata33 <- lm(Q_OF_LIFE_INDEX ~ AVERAGE_INCOME + GRP, data = df_other)
+
+summary(mydata22)
+summary(mydata33)
+```
+## Теперь проинтерпретируем результаты:
+В Центральном ФО доходы значимо влияют на качество жизни. А в остальных регионах модель практически не объясняет индекс качества жизни. Возможно, важны другие факторы (здравоохранение, рынок труда, экология).
+
+# 3) Построим графики предсказанных и фактических значений для модели mydata22.
+```{r}
+predictions <- predict(mydata22)
+ggplot(df_central, aes(x = predictions, y = Q_OF_LIFE_INDEX)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "blue") +
+  labs(title = "Предсказанные vs Фактические значения для Центрального ФО",
+       x = "Предсказанные значения",
+       y = "Фактические значения")
+```
+
+
+## Теперь постороим график остатков модели
+```{r}
+residuals <- residuals(mydata22)
+ggplot(data.frame(residuals), aes(x = residuals)) +
+  geom_histogram(bins = 30) +
+  labs(title = "График остатков модели mydata22",
+       x = "Остатки",
+       y = "Частота")
+```
+
+## Наконец сформулируем выводы:
+График предсказанных vs фактических значений:
+Мы видим положительную зависимость: чем выше предсказанные значения, тем выше фактический индекс. Однако точки не идеально ложатся на диагональ (есть отклонения модели).
+
+График остатков модели:
+Распределение остатков выглядит примерно нормальным, но с небольшими отклонениями. Это может означать, что модель в целом адекватна. 
+
+# 4) Построим степенную модель и график ее остатков 
+
+```{r}
+lm_power <- lm(Q_OF_LIFE_INDEX ~ poly(AVERAGE_INCOME, 2) + poly(GRP, 2), data = df_central)
+summary(lm_power)
+```
+
+# График остатков степенной модели
+```{r}
+power_predictions <- predict(lm_power)
+power_residuals <- residuals(lm_power)
+
+ggplot(data.frame(power_residuals), aes(x = power_residuals)) +
+  geom_histogram(bins = 30) +
+  labs(title = "График остатков степенной модели",
+       x = "Остатки",
+       y = "Частота")
+```
+
+## Теперь сделаем выводы по степенной модели
+
+Качество модели улучшилось. Модель в целом значима.
+
+В Центральном ФО доходы значимо влияют на качество жизни, а ВРП – нет. В остальных регионах модель плохо объясняет индекс качества жизни. 
+Степенная модель может улучшить предсказания, если остатки распределены лучше.

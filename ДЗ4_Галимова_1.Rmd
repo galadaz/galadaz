@@ -1,0 +1,54 @@
+---
+title: "Домашнее задание №4"
+author: "Adelya Galimova"
+date: "2025-03-30"
+output: html_document
+---
+
+
+##### Для групп 1 и 3: Сдавать на почту: akrudenko@edu.hse.ru.
+
+
+```{r message=FALSE, warning=FALSE}
+library(knitr)
+library(kableExtra)
+library(magrittr)
+library(openxlsx)
+library(pander)
+library(corrplot)
+library(caret)
+library(FactoMineR)
+library(factoextra)
+library(devtools)
+library(rio)
+library(corrplot)
+library(psych)
+library(ggpubr)
+library(REdaS)
+```
+
+> 1. Построить корреляционную матрицу, провести тест сферичности Бартлетта для данных по всем ФО, кроме Центрального. Сделать выводы о применимости МГК на выбранном наборе.
+
+```{r}
+df <- read.xlsx('russian_regions.xlsx', sheet = 'Data')
+```
+
+```{r, echo = FALSE}
+desc <- read.xlsx('russian_regions.xlsx', sheet = 'Description of data')
+kbl(desc, caption = "Таблица 1. Описание данных", booktabs = T, 
+    col.names = c("Переменная", "Описание переменной")) %>% 
+  kable_classic_2(html_font = "Cambria", font_size = 10, full_width = F) %>%
+  pack_rows("Зависимая переменная", 1, 1) %>%
+  pack_rows("Уровень жизни", 2, 3) %>%
+  pack_rows("Медицина", 4, 6) %>%
+  pack_rows("Экология", 7, 8) %>%
+  pack_rows("Рынок труда", 9, 17) %>%
+  pack_rows("Прочее", 18, 18)
+```
+
+> 2. Провести МГК и определить оптимальное количество ГК для дальнейшего анализа, согласно доле суммарной вариации.
+
+> 3. Построить регрессию на 3 главные компоненты, сделать выводы.
+
+> 4. Сравнить результаты с построенной линейной регрессией на все исходные данные.
+

@@ -1,0 +1,120 @@
+---
+title: "ДЗ5_Галимова_1"
+author: "Adelya Galimova"
+date: "2025-04-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE}
+library(knitr)
+library(kableExtra)
+library(magrittr)
+library(openxlsx)
+library(pander)
+library(caret)
+library(rio)
+library(factoextra)
+library(corrplot)
+library(cluster)
+library(biotools)
+```
+
+Провести кластеризацию по данным об индексе качества жизни.
+
+# 1. Рассмотреть возможность использования данных об индексе качества жизни для выделения кластеров (оценка корреляционной матрицы).
+
+```{r}
+df <- read.xlsx('russian_regions.xlsx', sheet = 'Data')
+```
+
+```{r, echo = FALSE}
+desc <- read.xlsx('russian_regions.xlsx', sheet = 'Description of data')
+kbl(desc, caption = "Таблица 1. Описание данных", booktabs = T, 
+    col.names = c("Переменная", "Описание переменной")) %>% 
+  kable_classic_2(html_font = "Cambria", font_size = 10, full_width = F) %>%
+  pack_rows("Зависимая переменная", 1, 1) %>%
+  pack_rows("Уровень жизни", 2, 3) %>%
+  pack_rows("Медицина", 4, 6) %>%
+  pack_rows("Экология", 7, 8) %>%
+  pack_rows("Рынок труда", 9, 17) %>%
+  pack_rows("Прочее", 18, 18)
+```
+
+# Построим корреляционную матрицу
+```{r, echo = FALSE}
+df1 <- df[,3:18]
+corr_mat <- cor(df1)
+corrplot(corr_mat, method = "color", type = "upper", tl.cex = 0.8,
+         addCoef.col = "black", number.cex = 0.7)
+```
+
+Многие переменные имеют высокую степень корреляции между собой. Это говорит о наличии латентных факторов, влияющих на качество жизни.
+
+# 2. Выбрать и обосновать оптимальное число кластеров.
+```{r, echo = FALSE}
+df_scaled <- scale(df1)
+fviz_nbclust(df_scaled, kmeans, method = "wss")
+fviz_nbclust(df_scaled, kmeans, method = "silhouette")
+set.seed(123)
+
+fviz_nbclust(df_scaled, kmeans, method = 'wss') +
+  labs(x = 'Число кластеров', y = 'Сумма внутрикластерных дисперсий',
+       title = 'Зависимость WSS от числа кластеров')
+```
+
+Правило выбора числа кластеров, основанное на WSS, называется иногда методом локтя (elbow method). Принято считать оптимальным число кластеров, после которого убывание WSS начинает замедляться, таким образом, в нашем случае: 3. 
+
+Метод локтя указывает на наличие «излома» при 3 кластерах, метод силуэтов подтверждает это.
+
+# 3. Провести иерархическую кластеризацию двумя разными методами с оптимальным числом кластеров.
+```{r, echo = FALSE}
+d <- dist(df_scaled)
+hc1 <- hclust(d, method = "ward.D")
+plot(hc1, labels = FALSE, main = "Иерархическая кластеризация (ward.D)")
+rect.hclust(hc1, k = 3, border = 2:5)
+
+hc2 <- hclust(d, method = "complete")
+plot(hc2, labels = FALSE, main = "Иерархическая кластеризация (complete)")
+rect.hclust(hc2, k = 3, border = 2:5)
+```
+Метод ward.D дает четко выраженные и сбалансированные кластеры.
+
+Метод complete также выделяет кластеры, но с немного други распределением.
+
+# 4. Реализовать дивизимный алгоритм иерархической кластеризации. Сравнить результаты с предыдущим пунктом.
+```{r, echo = FALSE}
+diana_clust <- diana(df_scaled)
+plot(diana_clust, main = "DIANA (divisive hierarchical clustering)")
+diana_groups <- cutree(as.hclust(diana_clust), k = 3)
+table(diana_groups)
+```
+Алгоритм также выделил 3 кластера, что подтверждает стабильность сегментации регионов вне зависимости от метода кластеризации.
+Распределение кластеров отличается от агломеративного подхода, что свидетельствует о различной чувствительности методов к структуре данных.
+
+
+# 5. Провести кластеризацию методом k-means для полной выборки, описать полученные кластеры на основе графика средних, провести тест на равенство средних по переменным для полученных кластеров (ANOVA).
+```{r, echo = FALSE}
+set.seed(123)
+kmeans_res <- kmeans(df_scaled, centers = 3, nstart = 25)
+fviz_cluster(kmeans_res, data = df_scaled,
+             geom = "point", ellipse.type = "convex",
+             palette = "jco", ggtheme = theme_minimal())
+
+aggregate(df1, by = list(cluster = kmeans_res$cluster), mean)
+
+anova_results <- lapply(df1, function(x) {
+  summary(aov(x ~ factor(kmeans_res$cluster)))
+})
+names(anova_results) <- colnames(df1)
+anova_results[["Q_OF_LIFE_INDEX"]]
+```
+
+Графики показывают хорошую разделимость кластеров.
+
+Средние значения по переменным существенно различаются между кластерами, что подтверждает валидность сегментации.
+
+ANOVA для переменной Q_OF_LIFE_INDEX показывает статистически значимые различия между кластерами (p < 0.05), следовательно,индексы качества жизни действительно различаются по кластерам.
